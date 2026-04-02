@@ -70,12 +70,12 @@ export default function Reports() {
   };
 
   const fetchSalesReport = async () => {
-    const data = storage.getInvoices();
+    const data = await storage.getInvoices();
     setSalesReport(data || []);
   };
 
   const fetchBestSellers = async () => {
-    const invoices = storage.getInvoices();
+    const invoices = await storage.getInvoices();
     const data: any[] = [];
     invoices.forEach(inv => {
       inv.invoice_items.forEach(item => {
@@ -98,13 +98,13 @@ export default function Reports() {
 
   const fetchSlowMovers = async () => {
     // Simplified logic: products with stock but no recent sales
-    const products = storage.getProducts();
+    const products = await storage.getProducts();
     const filtered = products.filter(p => p.current_stock > 0);
     setSlowMovers(filtered || []);
   };
 
   const fetchProfitAnalysis = async () => {
-    const products = storage.getProducts();
+    const products = await storage.getProducts();
     
     const analysis = products?.map(p => ({
       ...p,

@@ -1,77 +1,101 @@
-import { Product, Invoice, UserProfile } from '@/types';
-import { MOCK_PRODUCTS, MOCK_USER } from './mockData';
-
-const STORAGE_KEYS = {
-  PRODUCTS: 'shopflow_products',
-  INVOICES: 'shopflow_invoices',
-  USER: 'shopflow_user',
-  SETTINGS: 'shopflow_settings'
-};
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  setDoc, 
+  addDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  orderBy,
+  writeBatch,
+  serverTimestamp,
+  Timestamp
+} from 'firebase/firestore';
+import { db } from './firebase';
+import { Product, Invoice, UserProfile, InvoiceItem } from '@/types';
 
 export const storage = {
   // Products
-  getProducts: (): Product[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(MOCK_PRODUCTS));
-      return MOCK_PRODUCTS;
-    }
-    return JSON.parse(data);
+  getProducts: async (): Promise<Product[]> => {
+    const q = query(collection(db, 'products'), orderBy('name', 'asc'));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
   },
-  saveProduct: (product: Product) => {
-    const products = storage.getProducts();
-    const index = products.findIndex(p => p.id === product.id);
-    if (index >= 0) {
-      products[index] = { ...product, updated_at: new Date().toISOString() };
+  saveProduct: async (product: Partial<Product>) => {
+    if (product.id) {
+      const docRef = doc(db, 'products', product.id);
+      await setDoc(docRef, { ...product, updated_at: new Date().toISOString() }, { merge: true });
+      return { id: product.id, ...product } as Product;
     } else {
-      products.push({ ...product, id: Math.random().toString(36).substr(2, 9), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+      const docRef = await addDoc(collection(db, 'products'), {
+        ...product,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      return { id: docRef.id, ...product } as Product;
     }
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
-    return product;
   },
-  deleteProduct: (id: string) => {
-    const products = storage.getProducts();
-    const filtered = products.filter(p => p.id !== id);
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(filtered));
+  deleteProduct: async (id: string) => {
+    await deleteDoc(doc(db, 'products', id));
   },
 
   // Invoices
-  getInvoices: (): Invoice[] => {
-    const data = localStorage.getItem(STORAGE_KEYS.INVOICES);
-    return data ? JSON.parse(data) : [];
+  getInvoices: async (): Promise<Invoice[]> => {
+    const q = query(collection(db, 'invoices'), orderBy('invoice_date', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const invoices: Invoice[] = [];
+    
+    for (const invoiceDoc of querySnapshot.docs) {
+      const invoiceData = invoiceDoc.data();
+      // Fetch items for each invoice
+      const itemsSnapshot = await getDocs(collection(db, 'invoices', invoiceDoc.id, 'items'));
+      const items = itemsSnapshot.docs.map(itemDoc => ({ id: itemDoc.id, ...itemDoc.data() } as InvoiceItem));
+      
+      invoices.push({ 
+        id: invoiceDoc.id, 
+        ...invoiceData, 
+        invoice_items: items 
+      } as Invoice);
+    }
+    
+    return invoices;
   },
-  saveInvoice: (invoice: Invoice) => {
-    const invoices = storage.getInvoices();
-    const newInvoice = {
-      ...invoice,
-      id: Math.random().toString(36).substr(2, 9),
+  saveInvoice: async (invoice: any) => {
+    const batch = writeBatch(db);
+    const invoiceRef = doc(collection(db, 'invoices'));
+    const { invoice_items, ...invoiceData } = invoice;
+    
+    batch.set(invoiceRef, {
+      ...invoiceData,
       created_at: new Date().toISOString()
-    };
-    invoices.push(newInvoice);
-    localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
-    
-    // Update stock levels
-    const products = storage.getProducts();
-    invoice.invoice_items.forEach(item => {
-      const product = products.find(p => p.id === item.product_id);
-      if (product) {
-        product.current_stock -= item.quantity;
-      }
     });
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
-    
-    return newInvoice;
+
+    // Add items and update stock
+    for (const item of invoice_items) {
+      const itemRef = doc(collection(db, 'invoices', invoiceRef.id, 'items'));
+      batch.set(itemRef, item);
+
+      // Update product stock
+      const productRef = doc(db, 'products', item.product_id);
+      const productSnap = await getDoc(productRef);
+      if (productSnap.exists()) {
+        const currentStock = productSnap.data().current_stock;
+        batch.update(productRef, {
+          current_stock: currentStock - item.quantity,
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+
+    await batch.commit();
+    return { id: invoiceRef.id, ...invoiceData, invoice_items };
   },
 
   // User
-  getUser: (): UserProfile | null => {
-    const data = localStorage.getItem(STORAGE_KEYS.USER);
-    return data ? JSON.parse(data) : MOCK_USER;
-  },
-  saveUser: (user: UserProfile) => {
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
-  },
-  clearUser: () => {
-    localStorage.removeItem(STORAGE_KEYS.USER);
+  getUserProfile: async (userId: string): Promise<UserProfile | null> => {
+    const docSnap = await getDoc(doc(db, 'user_profiles', userId));
+    return docSnap.exists() ? (docSnap.data() as UserProfile) : null;
   }
 };

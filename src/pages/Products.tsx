@@ -82,7 +82,7 @@ export default function Products() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const data = storage.getProducts();
+      const data = await storage.getProducts();
       setProducts(data || []);
     } catch (error: any) {
       toast.error('Error fetching products: ' + error.message);
@@ -95,10 +95,10 @@ export default function Products() {
     e.preventDefault();
     try {
       if (editingProduct) {
-        storage.saveProduct({ ...editingProduct, ...formData } as Product);
+        await storage.saveProduct({ ...editingProduct, ...formData } as Product);
         toast.success('Product updated successfully');
       } else {
-        storage.saveProduct(formData as Product);
+        await storage.saveProduct(formData as Product);
         toast.success('Product added successfully');
       }
       setIsModalOpen(false);
@@ -113,7 +113,7 @@ export default function Products() {
   const handleDeleteProduct = async (id: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
     try {
-      storage.deleteProduct(id);
+      await storage.deleteProduct(id);
       toast.success('Product deleted successfully');
       fetchProducts();
     } catch (error: any) {

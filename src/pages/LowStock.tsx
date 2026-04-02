@@ -33,7 +33,7 @@ export default function LowStock() {
   const fetchLowStock = async () => {
     try {
       setLoading(true);
-      const data = storage.getProducts();
+      const data = await storage.getProducts();
       const filtered = data?.filter(p => p.is_active && p.current_stock <= p.reorder_level) || [];
       setLowStockProducts(filtered);
     } catch (error: any) {

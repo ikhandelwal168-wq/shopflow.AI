@@ -68,7 +68,7 @@ export default function Billing() {
   }, [searchQuery]);
 
   const searchProducts = async () => {
-    const products = storage.getProducts();
+    const products = await storage.getProducts();
     const results = products.filter(p => 
       p.is_active && (
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -93,12 +93,12 @@ export default function Billing() {
 
     setIsProcessing(true);
     try {
-      const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const todayDate = new Date().toISOString().split('T')[0].replace(/-/g, '');
       
       // 1. Generate Invoice Number
-      const invoices = storage.getInvoices();
-      const todayInvoices = invoices.filter(inv => inv.invoice_number.includes(today));
-      const invoiceNumber = `INV-${today}-${String(todayInvoices.length + 1).padStart(4, '0')}`;
+      const invoices = await storage.getInvoices();
+      const todayInvoices = invoices.filter(inv => inv.invoice_number.includes(todayDate));
+      const invoiceNumber = `INV-${todayDate}-${String(todayInvoices.length + 1).padStart(4, '0')}`;
 
       // 2. Create Invoice
       const invoiceData: any = {
@@ -129,7 +129,7 @@ export default function Billing() {
         })
       };
 
-      storage.saveInvoice(invoiceData);
+      await storage.saveInvoice(invoiceData);
       toast.success('Sale completed successfully! Invoice: ' + invoiceNumber);
       clearCart();
       setSearchQuery('');

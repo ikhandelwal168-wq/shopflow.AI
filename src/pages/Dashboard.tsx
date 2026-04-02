@@ -47,8 +47,8 @@ export default function Dashboard() {
     try {
       setLoading(true);
       
-      const invoices = storage.getInvoices();
-      const products = storage.getProducts();
+      const invoices = await storage.getInvoices();
+      const products = await storage.getProducts();
       
       // Filter for today's invoices
       const today = new Date();

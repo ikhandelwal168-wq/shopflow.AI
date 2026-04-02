@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { auth, db } from '@/lib/firebase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  updateProfile
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,31 +16,68 @@ import { Package } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Login() {
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signInWithGoogle } = useAuth();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Mock login - accept any credentials for now
-      signIn(email);
-      toast.success('Logged in successfully');
+      if (isSignUp) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        await updateProfile(user, { displayName: fullName });
+        
+        // Create profile in Firestore
+        await setDoc(doc(db, 'user_profiles', user.uid), {
+          id: user.uid,
+          full_name: fullName,
+          email: user.email,
+          role: 'staff',
+          created_at: new Date().toISOString()
+        });
+        
+        toast.success('Account created successfully');
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        toast.success('Logged in successfully');
+      }
       navigate('/dashboard');
     } catch (error: any) {
-      toast.error('Failed to sign in');
+      console.error('Auth error:', error);
+      toast.error(error.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
-    signIn('google-user@example.com');
-    toast.success('Logged in with Google');
-    navigate('/dashboard');
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+      toast.success('Logged in with Google');
+      navigate('/dashboard');
+    } catch (error: any) {
+      // Ignore these specific errors as they are user-initiated or non-critical
+      if (
+        error.code === 'auth/popup-closed-by-user' ||
+        error.code === 'auth/cancelled-popup-request'
+      ) {
+        console.log('Google login was cancelled or popup closed');
+        return;
+      }
+      
+      console.error('Google login error:', error);
+      toast.error(error.message || 'Google login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -46,13 +90,30 @@ export default function Login() {
                 <Package className="text-white w-8 h-8" />
               </div>
             </div>
-            <CardTitle className="text-2xl font-bold tracking-tight">ShopFlow Inventory</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight">
+              {isSignUp ? 'Create an account' : 'ShopFlow Inventory'}
+            </CardTitle>
             <CardDescription>
-              Enter your credentials to access your dashboard
+              {isSignUp 
+                ? 'Enter your details to get started' 
+                : 'Enter your credentials to access your dashboard'}
             </CardDescription>
           </CardHeader>
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleAuth}>
             <CardContent className="grid gap-4">
+              {isSignUp && (
+                <div className="grid gap-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="John Doe"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -77,8 +138,20 @@ export default function Login() {
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
               <Button className="w-full" type="submit" disabled={loading}>
-                {loading ? 'Signing in...' : 'Sign In'}
+                {loading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
               </Button>
+              
+              <div className="text-center text-sm">
+                {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                <button
+                  type="button"
+                  className="text-primary font-medium hover:underline"
+                  onClick={() => setIsSignUp(!isSignUp)}
+                >
+                  {isSignUp ? 'Sign In' : 'Sign Up'}
+                </button>
+              </div>
+
               <div className="relative w-full">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t" />
@@ -87,7 +160,7 @@ export default function Login() {
                   <span className="bg-white px-2 text-gray-500">Or continue with</span>
                 </div>
               </div>
-              <Button variant="outline" className="w-full" type="button" onClick={handleGoogleLogin}>
+              <Button variant="outline" className="w-full" type="button" onClick={handleGoogleLogin} disabled={loading}>
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
