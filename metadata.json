@@ -1,0 +1,5 @@
+{
+  "name": "ShopFlow Inventory",
+  "description": "A smart inventory management and billing system with real-time tracking, GST invoicing, and profit analytics.",
+  "requestFramePermissions": []
+}
