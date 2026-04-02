@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { auth, db } from '@/lib/firebase';
+import { auth, db, handleFirestoreError, OperationType } from '@/lib/firebase';
 import { 
   onAuthStateChanged, 
   signOut as firebaseSignOut, 
@@ -32,6 +32,7 @@ export function useAuth() {
   }, []);
 
   const fetchProfile = async (userId: string) => {
+    const path = `user_profiles/${userId}`;
     try {
       const docRef = doc(db, 'user_profiles', userId);
       const docSnap = await getDoc(docRef);
@@ -51,7 +52,7 @@ export function useAuth() {
         setProfile(newProfile);
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      handleFirestoreError(error, OperationType.GET, path);
     } finally {
       setLoading(false);
     }

@@ -72,6 +72,24 @@ export default function Login() {
         console.log('Google login was cancelled or popup closed');
         return;
       }
+
+      if (error.code === 'auth/unauthorized-domain') {
+        toast.error('Domain not authorized. Please add this domain to your Firebase Console authorized domains list.', {
+          duration: 10000,
+          action: {
+            label: 'How to fix',
+            onClick: () => window.open('https://console.firebase.google.com/project/gen-lang-client-0357803990/authentication/settings', '_blank')
+          }
+        });
+        return;
+      }
+
+      if (error.code === 'auth/network-request-failed') {
+        toast.error('Network error: Firebase could not be reached. This may be due to an ad-blocker or an unauthorized domain.', {
+          duration: 6000
+        });
+        return;
+      }
       
       console.error('Google login error:', error);
       toast.error(error.message || 'Google login failed');
